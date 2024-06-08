@@ -246,8 +246,8 @@ var Body = require('../body/Body');
 
         // Log all timings
         console.log('Timings:');
-        timings.forEach(timing => {
-            console.log(`${timing.section}: ${timing.time}ms`);
+        timings.forEach((timing, index) => {
+            console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
         });
 
         // Find the longest section

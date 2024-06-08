@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.2 by @liabru
+ * matter-js 0.19.3 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -6615,8 +6615,8 @@ var Body = __webpack_require__(4);
 
         // Log all timings
         console.log('Timings:');
-        timings.forEach(timing => {
-            console.log(`${timing.section}: ${timing.time}ms`);
+        timings.forEach((timing, index) => {
+            console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
         });
 
         // Find the longest section
@@ -7582,7 +7582,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.2" : undefined;
+    Matter.version =  true ? "0.19.3" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
