@@ -22,7 +22,7 @@ var Constraint = require('../constraint/Constraint');
 var Common = require('./Common');
 var Body = require('../body/Body');
 
-(function() {
+(function () {
 
     /**
      * Creates a new engine. The options parameter is an object that specifies any properties you wish to override the defaults.
@@ -32,7 +32,7 @@ var Body = require('../body/Body');
      * @param {object} [options]
      * @return {engine} engine
      */
-    Engine.create = function(options) {
+    Engine.create = function (options) {
         options = options || {};
 
         var defaults = {
@@ -67,7 +67,7 @@ var Body = require('../body/Body');
         engine.world.gravity = engine.gravity;
         engine.broadphase = engine.grid;
         engine.metrics = {};
-        
+
         return engine;
     };
 
@@ -79,8 +79,9 @@ var Body = require('../body/Body');
      * @param {engine} engine
      * @param {number} [delta=16.666]
      */
-    Engine.update = function(engine, delta) {
+    Engine.update = function (engine, delta) {
         var startTime = Common.now();
+        var startPerformance = performance.now();
 
         var world = engine.world,
             detector = engine.detector,
@@ -104,10 +105,15 @@ var Body = require('../body/Body');
 
         Events.trigger(engine, 'beforeUpdate', event);
 
+        var timings = [];
+
+        var startBodies = performance.now();
         // get all bodies and all constraints in the world
         var allBodies = Composite.allBodies(world),
             allConstraints = Composite.allConstraints(world);
+        timings.push({ section: 'get all bodies and constraints', time: performance.now() - startBodies });
 
+        var startModified = performance.now();
         // if the world has changed
         if (world.isModified) {
             // update the detector bodies
@@ -116,76 +122,99 @@ var Body = require('../body/Body');
             // reset all composite modified flags
             Composite.setModified(world, false, false, true);
         }
+        timings.push({ section: 'handle world modifications', time: performance.now() - startModified });
 
+        var startSleeping = performance.now();
         // update sleeping if enabled
         if (engine.enableSleeping)
             Sleeping.update(allBodies, delta);
+        timings.push({ section: 'update sleeping', time: performance.now() - startSleeping });
 
+        var startGravity = performance.now();
         // apply gravity to all bodies
         Engine._bodiesApplyGravity(allBodies, engine.gravity);
+        timings.push({ section: 'apply gravity', time: performance.now() - startGravity });
 
+        var startUpdateBodies = performance.now();
         // update all body position and rotation by integration
         if (delta > 0) {
             Engine._bodiesUpdate(allBodies, delta);
         }
+        timings.push({ section: 'update bodies', time: performance.now() - startUpdateBodies });
 
         Events.trigger(engine, 'beforeSolve', event);
 
+        var startConstraints = performance.now();
         // update all constraints (first pass)
         Constraint.preSolveAll(allBodies);
         for (i = 0; i < engine.constraintIterations; i++) {
             Constraint.solveAll(allConstraints, delta);
         }
         Constraint.postSolveAll(allBodies);
+        timings.push({ section: 'solve constraints', time: performance.now() - startConstraints });
 
+        var startCollisions = performance.now();
         // find all collisions
         var collisions = Detector.collisions(detector);
+        timings.push({ section: 'find collisions', time: performance.now() - startCollisions });
 
+        var startPairs = performance.now();
         // update collision pairs
         Pairs.update(pairs, collisions, timestamp);
+        timings.push({ section: 'update pairs', time: performance.now() - startPairs });
 
+        var startSleepingAfterCollisions = performance.now();
         // wake up bodies involved in collisions
         if (engine.enableSleeping)
             Sleeping.afterCollisions(pairs.list);
+        timings.push({ section: 'update sleeping after collisions', time: performance.now() - startSleepingAfterCollisions });
 
         // trigger collision events
         if (pairs.collisionStart.length > 0) {
-            Events.trigger(engine, 'collisionStart', { 
+            Events.trigger(engine, 'collisionStart', {
                 pairs: pairs.collisionStart,
                 timestamp: timing.timestamp,
                 delta: delta
             });
         }
 
+        var startPositionResolution = performance.now();
         // iteratively resolve position between collisions
         var positionDamping = Common.clamp(20 / engine.positionIterations, 0, 1);
-        
+
         Resolver.preSolvePosition(pairs.list);
         for (i = 0; i < engine.positionIterations; i++) {
             Resolver.solvePosition(pairs.list, delta, positionDamping);
         }
         Resolver.postSolvePosition(allBodies);
+        timings.push({ section: 'resolve positions', time: performance.now() - startPositionResolution });
 
+        var startConstraintsSecondPass = performance.now();
         // update all constraints (second pass)
         Constraint.preSolveAll(allBodies);
         for (i = 0; i < engine.constraintIterations; i++) {
             Constraint.solveAll(allConstraints, delta);
         }
         Constraint.postSolveAll(allBodies);
+        timings.push({ section: 'second pass of constraints', time: performance.now() - startConstraintsSecondPass });
 
+        var startVelocityResolution = performance.now();
         // iteratively resolve velocity between collisions
         Resolver.preSolveVelocity(pairs.list);
         for (i = 0; i < engine.velocityIterations; i++) {
             Resolver.solveVelocity(pairs.list, delta);
         }
+        timings.push({ section: 'resolve velocities', time: performance.now() - startVelocityResolution });
 
+        var startUpdateVelocities = performance.now();
         // update body speed and velocity properties
         Engine._bodiesUpdateVelocities(allBodies);
+        timings.push({ section: 'update velocities', time: performance.now() - startUpdateVelocities });
 
         // trigger collision events
         if (pairs.collisionActive.length > 0) {
-            Events.trigger(engine, 'collisionActive', { 
-                pairs: pairs.collisionActive, 
+            Events.trigger(engine, 'collisionActive', {
+                pairs: pairs.collisionActive,
                 timestamp: timing.timestamp,
                 delta: delta
             });
@@ -199,26 +228,44 @@ var Body = require('../body/Body');
             });
         }
 
+        var startClearForces = performance.now();
         // clear force buffers
         Engine._bodiesClearForces(allBodies);
+        timings.push({ section: 'clear forces', time: performance.now() - startClearForces });
 
         Events.trigger(engine, 'afterUpdate', event);
 
         // log the time elapsed computing this update
         engine.timing.lastElapsed = Common.now() - startTime;
 
+        var endPerformance = performance.now();
+        console.log(`Total update time: ${endPerformance - startPerformance}ms`);
+
+        // Sort timings by time in descending order
+        timings.sort((a, b) => b.time - a.time);
+
+        // Log all timings
+        console.log('Timings:');
+        timings.forEach(timing => {
+            console.log(`${timing.section}: ${timing.time}ms`);
+        });
+
+        // Find the longest section
+        var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms`);
+
         return engine;
     };
-    
+
     /**
      * Merges two engines by keeping the configuration of `engineA` but replacing the world with the one from `engineB`.
      * @method merge
      * @param {engine} engineA
      * @param {engine} engineB
      */
-    Engine.merge = function(engineA, engineB) {
+    Engine.merge = function (engineA, engineB) {
         Common.extend(engineA, engineB);
-        
+
         if (engineB.world) {
             engineA.world = engineB.world;
 
@@ -239,7 +286,7 @@ var Body = require('../body/Body');
      * @method clear
      * @param {engine} engine
      */
-    Engine.clear = function(engine) {
+    Engine.clear = function (engine) {
         Pairs.clear(engine.pairs);
         Detector.clear(engine.detector);
     };
@@ -250,7 +297,7 @@ var Body = require('../body/Body');
      * @private
      * @param {body[]} bodies
      */
-    Engine._bodiesClearForces = function(bodies) {
+    Engine._bodiesClearForces = function (bodies) {
         var bodiesLength = bodies.length;
 
         for (var i = 0; i < bodiesLength; i++) {
@@ -272,14 +319,14 @@ var Body = require('../body/Body');
      * @param {body[]} bodies
      * @param {vector} gravity
      */
-    Engine._bodiesApplyGravity = function(bodies, gravity) {
+    Engine._bodiesApplyGravity = function (bodies, gravity) {
         var gravityScale = typeof gravity.scale !== 'undefined' ? gravity.scale : 0.001,
             bodiesLength = bodies.length;
 
         if ((gravity.x === 0 && gravity.y === 0) || gravityScale === 0) {
             return;
         }
-        
+
         for (var i = 0; i < bodiesLength; i++) {
             var body = bodies[i];
 
@@ -299,7 +346,7 @@ var Body = require('../body/Body');
      * @param {body[]} bodies
      * @param {number} delta The amount of time elapsed between updates
      */
-    Engine._bodiesUpdate = function(bodies, delta) {
+    Engine._bodiesUpdate = function (bodies, delta) {
         var bodiesLength = bodies.length;
 
         for (var i = 0; i < bodiesLength; i++) {
@@ -318,7 +365,7 @@ var Body = require('../body/Body');
      * @private
      * @param {body[]} bodies
      */
-    Engine._bodiesUpdateVelocities = function(bodies) {
+    Engine._bodiesUpdateVelocities = function (bodies) {
         var bodiesLength = bodies.length;
 
         for (var i = 0; i < bodiesLength; i++) {
