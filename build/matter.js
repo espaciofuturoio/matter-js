@@ -6390,6 +6390,7 @@ var Composite = __webpack_require__(6);
 var Constraint = __webpack_require__(10);
 var Common = __webpack_require__(0);
 var Body = __webpack_require__(4);
+const createQuadtree = __webpack_require__(23);
 
 (function () {
 
@@ -6526,7 +6527,7 @@ var Body = __webpack_require__(4);
     
         var startCollisions = performance.now();
         // find all collisions using Quadtree
-        var quadtree = new Quadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
+        var quadtree = createQuadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
         for (let body of allBodies) {
             quadtree.insert(body);
         }
@@ -7552,22 +7553,22 @@ Matter.Contact = __webpack_require__(16);
 Matter.Detector = __webpack_require__(13);
 Matter.Engine = __webpack_require__(17);
 Matter.Events = __webpack_require__(5);
-Matter.Grid = __webpack_require__(23);
+Matter.Grid = __webpack_require__(24);
 Matter.Mouse = __webpack_require__(14);
-Matter.MouseConstraint = __webpack_require__(24);
+Matter.MouseConstraint = __webpack_require__(25);
 Matter.Pair = __webpack_require__(9);
 Matter.Pairs = __webpack_require__(19);
 Matter.Plugin = __webpack_require__(15);
-Matter.Query = __webpack_require__(25);
-Matter.Render = __webpack_require__(26);
+Matter.Query = __webpack_require__(26);
+Matter.Render = __webpack_require__(27);
 Matter.Resolver = __webpack_require__(18);
-Matter.Runner = __webpack_require__(27);
-Matter.SAT = __webpack_require__(28);
+Matter.Runner = __webpack_require__(28);
+Matter.SAT = __webpack_require__(29);
 Matter.Sleeping = __webpack_require__(7);
-Matter.Svg = __webpack_require__(29);
+Matter.Svg = __webpack_require__(30);
 Matter.Vector = __webpack_require__(2);
 Matter.Vertices = __webpack_require__(3);
-Matter.World = __webpack_require__(30);
+Matter.World = __webpack_require__(31);
 
 // temporary back compatibility
 Matter.Engine.run = Matter.Runner.run;
@@ -8011,6 +8012,99 @@ var deprecated = Common.deprecated;
 
 /***/ }),
 /* 23 */
+/***/ (function(module, exports) {
+
+function createQuadtree(bounds, capacity) {
+    const quadtree = {
+        bounds,
+        capacity,
+        bodies: [],
+        divided: false,
+        northeast: null,
+        northwest: null,
+        southeast: null,
+        southwest: null
+    };
+
+    quadtree.subdivide = function() {
+        const { x, y, width, height } = this.bounds;
+        const halfWidth = width / 2;
+        const halfHeight = height / 2;
+
+        this.northeast = createQuadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.northwest = createQuadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southeast = createQuadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southwest = createQuadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+
+        this.divided = true;
+    };
+
+    quadtree.insert = function(body) {
+        if (!this.contains(this.bounds, body)) {
+            return false;
+        }
+
+        if (this.bodies.length < this.capacity) {
+            this.bodies.push(body);
+            return true;
+        } else {
+            if (!this.divided) {
+                this.subdivide();
+            }
+
+            if (this.northeast.insert(body)) return true;
+            if (this.northwest.insert(body)) return true;
+            if (this.southeast.insert(body)) return true;
+            if (this.southwest.insert(body)) return true;
+        }
+    };
+
+    quadtree.contains = function(bounds, body) {
+        return (
+            body.position.x >= bounds.x &&
+            body.position.x < bounds.x + bounds.width &&
+            body.position.y >= bounds.y &&
+            body.position.y < bounds.y + bounds.height
+        );
+    };
+
+    quadtree.query = function(range, found) {
+        if (!this.intersects(range, this.bounds)) {
+            return found;
+        }
+
+        for (let body of this.bodies) {
+            if (this.contains(range, body)) {
+                found.push(body);
+            }
+        }
+
+        if (this.divided) {
+            this.northwest.query(range, found);
+            this.northeast.query(range, found);
+            this.southwest.query(range, found);
+            this.southeast.query(range, found);
+        }
+
+        return found;
+    };
+
+    quadtree.intersects = function(range, bounds) {
+        return !(
+            range.x > bounds.x + bounds.width ||
+            range.x + range.width < bounds.x ||
+            range.y > bounds.y + bounds.height ||
+            range.y + range.height < bounds.y
+        );
+    };
+
+    return quadtree;
+}
+
+module.exports = createQuadtree;
+
+/***/ }),
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8356,7 +8450,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 24 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8623,7 +8717,7 @@ var Bounds = __webpack_require__(1);
 
 
 /***/ }),
-/* 25 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8765,7 +8859,7 @@ var Vertices = __webpack_require__(3);
 
 
 /***/ }),
-/* 26 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10647,7 +10741,7 @@ var Mouse = __webpack_require__(14);
 
 
 /***/ }),
-/* 27 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10923,7 +11017,7 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 28 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10966,7 +11060,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 29 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11197,7 +11291,7 @@ var Common = __webpack_require__(0);
 })();
 
 /***/ }),
-/* 30 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**

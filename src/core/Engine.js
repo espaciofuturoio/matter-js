@@ -21,6 +21,7 @@ var Composite = require('../body/Composite');
 var Constraint = require('../constraint/Constraint');
 var Common = require('./Common');
 var Body = require('../body/Body');
+const createQuadtree = require('../collision/Quadtree');
 
 (function () {
 
@@ -157,7 +158,7 @@ var Body = require('../body/Body');
     
         var startCollisions = performance.now();
         // find all collisions using Quadtree
-        var quadtree = new Quadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
+        var quadtree = createQuadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
         for (let body of allBodies) {
             quadtree.insert(body);
         }
