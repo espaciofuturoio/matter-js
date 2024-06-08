@@ -52,7 +52,9 @@ var Body = require('../body/Body');
                 timeScale: 1,
                 lastDelta: 0,
                 lastElapsed: 0
-            }
+            },
+            renderWidth: 0,
+            renderHeight: 0
         };
 
         var engine = Common.extend(defaults, options);
