@@ -1,29 +1,25 @@
-function createQuadtree(bounds, capacity) {
-    const quadtree = {
-        bounds,
-        capacity,
-        bodies: [],
-        divided: false,
-        northeast: null,
-        northwest: null,
-        southeast: null,
-        southwest: null
-    };
+class Quadtree {
+    constructor(bounds, capacity) {
+        this.bounds = bounds;
+        this.capacity = capacity;
+        this.bodies = [];
+        this.divided = false;
+    }
 
-    quadtree.subdivide = function() {
+    subdivide() {
         const { x, y, width, height } = this.bounds;
         const halfWidth = width / 2;
         const halfHeight = height / 2;
 
-        this.northeast = createQuadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.northwest = createQuadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southeast = createQuadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southwest = createQuadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+        this.northeast = new Quadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.northwest = new Quadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southeast = new Quadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southwest = new Quadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
 
         this.divided = true;
-    };
+    }
 
-    quadtree.insert = function(body) {
+    insert(body) {
         if (!this.contains(this.bounds, body)) {
             return false;
         }
@@ -41,18 +37,18 @@ function createQuadtree(bounds, capacity) {
             if (this.southeast.insert(body)) return true;
             if (this.southwest.insert(body)) return true;
         }
-    };
+    }
 
-    quadtree.contains = function(bounds, body) {
+    contains(bounds, body) {
         return (
             body.position.x >= bounds.x &&
             body.position.x < bounds.x + bounds.width &&
             body.position.y >= bounds.y &&
             body.position.y < bounds.y + bounds.height
         );
-    };
+    }
 
-    quadtree.query = function(range, found) {
+    query(range, found) {
         if (!this.intersects(range, this.bounds)) {
             return found;
         }
@@ -71,18 +67,16 @@ function createQuadtree(bounds, capacity) {
         }
 
         return found;
-    };
+    }
 
-    quadtree.intersects = function(range, bounds) {
+    intersects(range, bounds) {
         return !(
             range.x > bounds.x + bounds.width ||
             range.x + range.width < bounds.x ||
             range.y > bounds.y + bounds.height ||
             range.y + range.height < bounds.y
         );
-    };
-
-    return quadtree;
+    }
 }
 
-module.exports = createQuadtree;
+module.exports = Quadtree;

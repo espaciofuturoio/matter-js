@@ -21,7 +21,7 @@ var Composite = require('../body/Composite');
 var Constraint = require('../constraint/Constraint');
 var Common = require('./Common');
 var Body = require('../body/Body');
-const createQuadtree = require('../collision/Quadtree');
+var Quadtree = require('../collision/Quadtree');
 
 (function () {
 
@@ -158,14 +158,19 @@ const createQuadtree = require('../collision/Quadtree');
     
         var startCollisions = performance.now();
         // find all collisions using Quadtree
-        var quadtree = createQuadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
+        const quadtree = new Quadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
         for (let body of allBodies) {
             quadtree.insert(body);
         }
     
         const potentialCollisions = [];
         for (let body of allBodies) {
-            const range = { x: body.position.x - body.bounds.width / 2, y: body.position.y - body.bounds.height / 2, width: body.bounds.width, height: body.bounds.height };
+            const range = { 
+                x: body.position.x - body.bounds.width / 2, 
+                y: body.position.y - body.bounds.height / 2, 
+                width: body.bounds.width, 
+                height: body.bounds.height 
+            };
             const found = quadtree.query(range, []);
             for (let other of found) {
                 if (body !== other) {
@@ -278,7 +283,7 @@ const createQuadtree = require('../collision/Quadtree');
     
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms version: 1.19.7`);
     
         return engine;
     };

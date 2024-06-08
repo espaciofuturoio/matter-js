@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.5 by @liabru
+ * matter-js 0.19.7 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -6390,7 +6390,7 @@ var Composite = __webpack_require__(6);
 var Constraint = __webpack_require__(10);
 var Common = __webpack_require__(0);
 var Body = __webpack_require__(4);
-const createQuadtree = __webpack_require__(23);
+var Quadtree = __webpack_require__(23);
 
 (function () {
 
@@ -6527,14 +6527,19 @@ const createQuadtree = __webpack_require__(23);
     
         var startCollisions = performance.now();
         // find all collisions using Quadtree
-        var quadtree = createQuadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
+        const quadtree = new Quadtree({ x: 0, y: 0, width: engine.renderWidth, height: engine.renderHeight }, 4);
         for (let body of allBodies) {
             quadtree.insert(body);
         }
     
         const potentialCollisions = [];
         for (let body of allBodies) {
-            const range = { x: body.position.x - body.bounds.width / 2, y: body.position.y - body.bounds.height / 2, width: body.bounds.width, height: body.bounds.height };
+            const range = { 
+                x: body.position.x - body.bounds.width / 2, 
+                y: body.position.y - body.bounds.height / 2, 
+                width: body.bounds.width, 
+                height: body.bounds.height 
+            };
             const found = quadtree.query(range, []);
             for (let other of found) {
                 if (body !== other) {
@@ -6647,7 +6652,7 @@ const createQuadtree = __webpack_require__(23);
     
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms version: 1.19.7`);
     
         return engine;
     };
@@ -7608,7 +7613,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.5" : undefined;
+    Matter.version =  true ? "0.19.7" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
@@ -8014,32 +8019,28 @@ var deprecated = Common.deprecated;
 /* 23 */
 /***/ (function(module, exports) {
 
-function createQuadtree(bounds, capacity) {
-    const quadtree = {
-        bounds,
-        capacity,
-        bodies: [],
-        divided: false,
-        northeast: null,
-        northwest: null,
-        southeast: null,
-        southwest: null
-    };
+class Quadtree {
+    constructor(bounds, capacity) {
+        this.bounds = bounds;
+        this.capacity = capacity;
+        this.bodies = [];
+        this.divided = false;
+    }
 
-    quadtree.subdivide = function() {
+    subdivide() {
         const { x, y, width, height } = this.bounds;
         const halfWidth = width / 2;
         const halfHeight = height / 2;
 
-        this.northeast = createQuadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.northwest = createQuadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southeast = createQuadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southwest = createQuadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+        this.northeast = new Quadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.northwest = new Quadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southeast = new Quadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
+        this.southwest = new Quadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
 
         this.divided = true;
-    };
+    }
 
-    quadtree.insert = function(body) {
+    insert(body) {
         if (!this.contains(this.bounds, body)) {
             return false;
         }
@@ -8057,18 +8058,18 @@ function createQuadtree(bounds, capacity) {
             if (this.southeast.insert(body)) return true;
             if (this.southwest.insert(body)) return true;
         }
-    };
+    }
 
-    quadtree.contains = function(bounds, body) {
+    contains(bounds, body) {
         return (
             body.position.x >= bounds.x &&
             body.position.x < bounds.x + bounds.width &&
             body.position.y >= bounds.y &&
             body.position.y < bounds.y + bounds.height
         );
-    };
+    }
 
-    quadtree.query = function(range, found) {
+    query(range, found) {
         if (!this.intersects(range, this.bounds)) {
             return found;
         }
@@ -8087,21 +8088,19 @@ function createQuadtree(bounds, capacity) {
         }
 
         return found;
-    };
+    }
 
-    quadtree.intersects = function(range, bounds) {
+    intersects(range, bounds) {
         return !(
             range.x > bounds.x + bounds.width ||
             range.x + range.width < bounds.x ||
             range.y > bounds.y + bounds.height ||
             range.y + range.height < bounds.y
         );
-    };
-
-    return quadtree;
+    }
 }
 
-module.exports = createQuadtree;
+module.exports = Quadtree;
 
 /***/ }),
 /* 24 */
