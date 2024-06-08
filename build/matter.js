@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.8 by @liabru
+ * matter-js 0.19.9 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -118,7 +118,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 21);
+/******/ 	return __webpack_require__(__webpack_require__.s = 20);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -5560,16 +5560,27 @@ var Vector = __webpack_require__(2);
 /* 13 */
 /***/ (function(module, exports, __webpack_require__) {
 
+/**
+* The `Matter.Detector` module contains methods for efficiently detecting collisions between a list of bodies using a broadphase algorithm.
+*
+* @class Detector
+*/
+
 var Detector = {};
 
 module.exports = Detector;
 
 var Common = __webpack_require__(0);
 var Collision = __webpack_require__(8);
-var Quadtree = __webpack_require__(17);
 
 (function() {
 
+    /**
+     * Creates a new collision detector.
+     * @method create
+     * @param {} options
+     * @return {detector} A new collision detector
+     */
     Detector.create = function(options) {
         var defaults = {
             bodies: [],
@@ -5580,15 +5591,35 @@ var Quadtree = __webpack_require__(17);
         return Common.extend(defaults, options);
     };
 
+    /**
+     * Sets the list of bodies in the detector.
+     * @method setBodies
+     * @param {detector} detector
+     * @param {body[]} bodies
+     */
     Detector.setBodies = function(detector, bodies) {
         detector.bodies = bodies.slice(0);
     };
 
+    /**
+     * Clears the detector including its list of bodies.
+     * @method clear
+     * @param {detector} detector
+     */
     Detector.clear = function(detector) {
         detector.bodies = [];
         detector.collisions = [];
     };
 
+    /**
+     * Efficiently finds all collisions among all the bodies in `detector.bodies` using a broadphase algorithm.
+     * 
+     * _Note:_ The specific ordering of collisions returned is not guaranteed between releases and may change for performance reasons.
+     * If a specific ordering is required then apply a sort to the resulting array.
+     * @method collisions
+     * @param {detector} detector
+     * @return {collision[]} collisions
+     */
     Detector.collisions = function(detector) {
         var pairs = detector.pairs,
             bodies = detector.bodies,
@@ -5600,66 +5631,68 @@ var Quadtree = __webpack_require__(17);
             i,
             j;
 
-        // Initialize Quadtree
-        const quadtree = new Quadtree({ x: 0, y: 0, width: 800, height: 600 }, 4);
-        for (let body of bodies) {
-            quadtree.insert(body);
-        }
+        bodies.sort(Detector._compareBoundsX);
 
-        const potentialCollisions = [];
-        for (let body of bodies) {
-            const range = { 
-                x: body.bounds.min.x, 
-                y: body.bounds.min.y, 
-                width: body.bounds.max.x - body.bounds.min.x, 
-                height: body.bounds.max.y - body.bounds.min.y 
-            };
-            const found = quadtree.query(range, []);
-            for (let other of found) {
-                if (body !== other) {
-                    potentialCollisions.push([body, other]);
+        for (i = 0; i < bodiesLength; i++) {
+            var bodyA = bodies[i],
+                boundsA = bodyA.bounds,
+                boundXMax = bodyA.bounds.max.x,
+                boundYMax = bodyA.bounds.max.y,
+                boundYMin = bodyA.bounds.min.y,
+                bodyAStatic = bodyA.isStatic || bodyA.isSleeping,
+                partsALength = bodyA.parts.length,
+                partsASingle = partsALength === 1;
+
+            for (j = i + 1; j < bodiesLength; j++) {
+                var bodyB = bodies[j],
+                    boundsB = bodyB.bounds;
+
+                if (boundsB.min.x > boundXMax) {
+                    break;
                 }
-            }
-        }
 
-        // Narrow-phase collision detection
-        for (let [bodyA, bodyB] of potentialCollisions) {
-            if (!canCollide(bodyA.collisionFilter, bodyB.collisionFilter)) {
-                continue;
-            }
-
-            var partsALength = bodyA.parts.length,
-                partsBLength = bodyB.parts.length,
-                partsASingle = partsALength === 1,
-                partsBSingle = partsBLength === 1;
-
-            if (partsASingle && partsBSingle) {
-                var collision = collides(bodyA, bodyB, pairs);
-
-                if (collision) {
-                    collisions[collisionIndex++] = collision;
+                if (boundYMax < boundsB.min.y || boundYMin > boundsB.max.y) {
+                    continue;
                 }
-            } else {
-                var partsAStart = partsALength > 1 ? 1 : 0,
-                    partsBStart = partsBLength > 1 ? 1 : 0;
-                
-                for (var k = partsAStart; k < partsALength; k++) {
-                    var partA = bodyA.parts[k],
-                        boundsA = partA.bounds;
 
-                    for (var z = partsBStart; z < partsBLength; z++) {
-                        var partB = bodyB.parts[z],
-                            boundsB = partB.bounds;
+                if (bodyAStatic && (bodyB.isStatic || bodyB.isSleeping)) {
+                    continue;
+                }
 
-                        if (boundsA.min.x > boundsB.max.x || boundsA.max.x < boundsB.min.x
-                            || boundsA.max.y < boundsB.min.y || boundsA.min.y > boundsB.max.y) {
-                            continue;
-                        }
+                if (!canCollide(bodyA.collisionFilter, bodyB.collisionFilter)) {
+                    continue;
+                }
 
-                        var collision = collides(partA, partB, pairs);
+                var partsBLength = bodyB.parts.length;
 
-                        if (collision) {
-                            collisions[collisionIndex++] = collision;
+                if (partsASingle && partsBLength === 1) {
+                    var collision = collides(bodyA, bodyB, pairs);
+
+                    if (collision) {
+                        collisions[collisionIndex++] = collision;
+                    }
+                } else {
+                    var partsAStart = partsALength > 1 ? 1 : 0,
+                        partsBStart = partsBLength > 1 ? 1 : 0;
+                    
+                    for (var k = partsAStart; k < partsALength; k++) {
+                        var partA = bodyA.parts[k],
+                            boundsA = partA.bounds;
+
+                        for (var z = partsBStart; z < partsBLength; z++) {
+                            var partB = bodyB.parts[z],
+                                boundsB = partB.bounds;
+
+                            if (boundsA.min.x > boundsB.max.x || boundsA.max.x < boundsB.min.x
+                                || boundsA.max.y < boundsB.min.y || boundsA.min.y > boundsB.max.y) {
+                                continue;
+                            }
+
+                            var collision = collides(partA, partB, pairs);
+
+                            if (collision) {
+                                collisions[collisionIndex++] = collision;
+                            }
                         }
                     }
                 }
@@ -5673,6 +5706,14 @@ var Quadtree = __webpack_require__(17);
         return collisions;
     };
 
+    /**
+     * Returns `true` if both supplied collision filters will allow a collision to occur.
+     * See `body.collisionFilter` for more information.
+     * @method canCollide
+     * @param {} filterA
+     * @param {} filterB
+     * @return {bool} `true` if collision can occur
+     */
     Detector.canCollide = function(filterA, filterB) {
         if (filterA.group === filterB.group && filterA.group !== 0)
             return filterA.group > 0;
@@ -5680,11 +5721,50 @@ var Quadtree = __webpack_require__(17);
         return (filterA.mask & filterB.category) !== 0 && (filterB.mask & filterA.category) !== 0;
     };
 
+    /**
+     * The comparison function used in the broadphase algorithm.
+     * Returns the signed delta of the bodies bounds on the x-axis.
+     * @private
+     * @method _sortCompare
+     * @param {body} bodyA
+     * @param {body} bodyB
+     * @return {number} The signed delta used for sorting
+     */
     Detector._compareBoundsX = function(bodyA, bodyB) {
         return bodyA.bounds.min.x - bodyB.bounds.min.x;
     };
 
+    /*
+    *
+    *  Properties Documentation
+    *
+    */
+
+    /**
+     * The array of `Matter.Body` between which the detector finds collisions.
+     * 
+     * _Note:_ The order of bodies in this array _is not fixed_ and will be continually managed by the detector.
+     * @property bodies
+     * @type body[]
+     * @default []
+     */
+
+    /**
+     * The array of `Matter.Collision` found in the last call to `Detector.collisions` on this detector.
+     * @property collisions
+     * @type collision[]
+     * @default []
+     */
+
+    /**
+     * Optional. A `Matter.Pairs` object from which previous collision objects may be reused. Intended for internal `Matter.Engine` usage.
+     * @property pairs
+     * @type {pairs|null}
+     * @default null
+     */
+
 })();
+
 
 /***/ }),
 /* 14 */
@@ -6285,93 +6365,6 @@ module.exports = Contact;
 
 /***/ }),
 /* 17 */
-/***/ (function(module, exports) {
-
-class Quadtree {
-    constructor(bounds, capacity) {
-        this.bounds = bounds;
-        this.capacity = capacity;
-        this.bodies = [];
-        this.divided = false;
-    }
-
-    subdivide() {
-        const { x, y, width, height } = this.bounds;
-        const halfWidth = width / 2;
-        const halfHeight = height / 2;
-
-        this.northeast = new Quadtree({ x: x + halfWidth, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.northwest = new Quadtree({ x: x, y: y, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southeast = new Quadtree({ x: x + halfWidth, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
-        this.southwest = new Quadtree({ x: x, y: y + halfHeight, width: halfWidth, height: halfHeight }, this.capacity);
-
-        this.divided = true;
-    }
-
-    insert(body) {
-        if (!this.contains(this.bounds, body)) {
-            return false;
-        }
-
-        if (this.bodies.length < this.capacity) {
-            this.bodies.push(body);
-            return true;
-        } else {
-            if (!this.divided) {
-                this.subdivide();
-            }
-
-            if (this.northeast.insert(body)) return true;
-            if (this.northwest.insert(body)) return true;
-            if (this.southeast.insert(body)) return true;
-            if (this.southwest.insert(body)) return true;
-        }
-    }
-
-    contains(bounds, body) {
-        return (
-            body.position.x >= bounds.x &&
-            body.position.x < bounds.x + bounds.width &&
-            body.position.y >= bounds.y &&
-            body.position.y < bounds.y + bounds.height
-        );
-    }
-
-    query(range, found) {
-        if (!this.intersects(range, this.bounds)) {
-            return found;
-        }
-
-        for (let body of this.bodies) {
-            if (this.contains(range, body)) {
-                found.push(body);
-            }
-        }
-
-        if (this.divided) {
-            this.northwest.query(range, found);
-            this.northeast.query(range, found);
-            this.southwest.query(range, found);
-            this.southeast.query(range, found);
-        }
-
-        return found;
-    }
-
-    intersects(range, bounds) {
-        return !(
-            range.x > bounds.x + bounds.width ||
-            range.x + range.width < bounds.x ||
-            range.y > bounds.y + bounds.height ||
-            range.y + range.height < bounds.y
-        );
-    }
-}
-
-module.exports = Quadtree;
-
-/***/ }),
-/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -6389,15 +6382,14 @@ var Engine = {};
 module.exports = Engine;
 
 var Sleeping = __webpack_require__(7);
-var Resolver = __webpack_require__(19);
+var Resolver = __webpack_require__(18);
 var Detector = __webpack_require__(13);
-var Pairs = __webpack_require__(20);
+var Pairs = __webpack_require__(19);
 var Events = __webpack_require__(5);
 var Composite = __webpack_require__(6);
 var Constraint = __webpack_require__(10);
 var Common = __webpack_require__(0);
 var Body = __webpack_require__(4);
-var Quadtree = __webpack_require__(17);
 
 (function () {
 
@@ -6458,118 +6450,147 @@ var Quadtree = __webpack_require__(17);
      * @param {engine} engine
      * @param {number} [delta=16.666]
      */
-    Engine.update = function(engine, delta) {
+    Engine.update = function (engine, delta) {
         var startTime = Common.now();
-    
+        var startPerformance = performance.now();
+
         var world = engine.world,
             detector = engine.detector,
             pairs = engine.pairs,
             timing = engine.timing,
             timestamp = timing.timestamp,
             i;
-    
+
         delta = typeof delta !== 'undefined' ? delta : Common._baseDelta;
         delta *= timing.timeScale;
-    
+
         // increment timestamp
         timing.timestamp += delta;
         timing.lastDelta = delta;
-    
+
         // create an event object
         var event = {
             timestamp: timing.timestamp,
             delta: delta
         };
-    
+
         Events.trigger(engine, 'beforeUpdate', event);
-    
+
+        var timings = [];
+
+        var startBodies = performance.now();
         // get all bodies and all constraints in the world
         var allBodies = Composite.allBodies(world),
             allConstraints = Composite.allConstraints(world);
-    
+        timings.push({ section: 'get all bodies and constraints', time: performance.now() - startBodies });
+
+        var startModified = performance.now();
         // if the world has changed
         if (world.isModified) {
             // update the detector bodies
             Detector.setBodies(detector, allBodies);
-    
+
             // reset all composite modified flags
             Composite.setModified(world, false, false, true);
         }
-    
+        timings.push({ section: 'handle world modifications', time: performance.now() - startModified });
+
+        var startSleeping = performance.now();
         // update sleeping if enabled
         if (engine.enableSleeping)
             Sleeping.update(allBodies, delta);
-    
+        timings.push({ section: 'update sleeping', time: performance.now() - startSleeping });
+
+        var startGravity = performance.now();
         // apply gravity to all bodies
         Engine._bodiesApplyGravity(allBodies, engine.gravity);
-    
+        timings.push({ section: 'apply gravity', time: performance.now() - startGravity });
+
+        var startUpdateBodies = performance.now();
         // update all body position and rotation by integration
         if (delta > 0) {
             Engine._bodiesUpdate(allBodies, delta);
         }
-    
+        timings.push({ section: 'update bodies', time: performance.now() - startUpdateBodies });
+
         Events.trigger(engine, 'beforeSolve', event);
-    
+
+        var startConstraints = performance.now();
         // update all constraints (first pass)
         Constraint.preSolveAll(allBodies);
         for (i = 0; i < engine.constraintIterations; i++) {
             Constraint.solveAll(allConstraints, delta);
         }
         Constraint.postSolveAll(allBodies);
-    
+        timings.push({ section: 'solve constraints', time: performance.now() - startConstraints });
+
+        var startCollisions = performance.now();
         // find all collisions
         var collisions = Detector.collisions(detector);
-    
+        timings.push({ section: 'find collisions', time: performance.now() - startCollisions });
+
+        var startPairs = performance.now();
         // update collision pairs
         Pairs.update(pairs, collisions, timestamp);
-    
+        timings.push({ section: 'update pairs', time: performance.now() - startPairs });
+
+        var startSleepingAfterCollisions = performance.now();
         // wake up bodies involved in collisions
         if (engine.enableSleeping)
             Sleeping.afterCollisions(pairs.list);
-    
+        timings.push({ section: 'update sleeping after collisions', time: performance.now() - startSleepingAfterCollisions });
+
         // trigger collision events
         if (pairs.collisionStart.length > 0) {
-            Events.trigger(engine, 'collisionStart', { 
+            Events.trigger(engine, 'collisionStart', {
                 pairs: pairs.collisionStart,
                 timestamp: timing.timestamp,
                 delta: delta
             });
         }
-    
+
+        var startPositionResolution = performance.now();
         // iteratively resolve position between collisions
         var positionDamping = Common.clamp(20 / engine.positionIterations, 0, 1);
-        
+
         Resolver.preSolvePosition(pairs.list);
         for (i = 0; i < engine.positionIterations; i++) {
             Resolver.solvePosition(pairs.list, delta, positionDamping);
         }
         Resolver.postSolvePosition(allBodies);
-    
+        timings.push({ section: 'resolve positions', time: performance.now() - startPositionResolution });
+
+        var startConstraintsSecondPass = performance.now();
         // update all constraints (second pass)
         Constraint.preSolveAll(allBodies);
         for (i = 0; i < engine.constraintIterations; i++) {
             Constraint.solveAll(allConstraints, delta);
         }
         Constraint.postSolveAll(allBodies);
-    
+        timings.push({ section: 'second pass of constraints', time: performance.now() - startConstraintsSecondPass });
+
+        var startVelocityResolution = performance.now();
         // iteratively resolve velocity between collisions
         Resolver.preSolveVelocity(pairs.list);
         for (i = 0; i < engine.velocityIterations; i++) {
             Resolver.solveVelocity(pairs.list, delta);
         }
-    
+        timings.push({ section: 'resolve velocities', time: performance.now() - startVelocityResolution });
+
+        var startUpdateVelocities = performance.now();
         // update body speed and velocity properties
         Engine._bodiesUpdateVelocities(allBodies);
-    
+        timings.push({ section: 'update velocities', time: performance.now() - startUpdateVelocities });
+
         // trigger collision events
         if (pairs.collisionActive.length > 0) {
-            Events.trigger(engine, 'collisionActive', { 
-                pairs: pairs.collisionActive, 
+            Events.trigger(engine, 'collisionActive', {
+                pairs: pairs.collisionActive,
                 timestamp: timing.timestamp,
                 delta: delta
             });
         }
-    
+
         if (pairs.collisionEnd.length > 0) {
             Events.trigger(engine, 'collisionEnd', {
                 pairs: pairs.collisionEnd,
@@ -6577,15 +6598,33 @@ var Quadtree = __webpack_require__(17);
                 delta: delta
             });
         }
-    
+
+        var startClearForces = performance.now();
         // clear force buffers
         Engine._bodiesClearForces(allBodies);
-    
+        timings.push({ section: 'clear forces', time: performance.now() - startClearForces });
+
         Events.trigger(engine, 'afterUpdate', event);
-    
+
         // log the time elapsed computing this update
         engine.timing.lastElapsed = Common.now() - startTime;
-    
+
+        var endPerformance = performance.now();
+        console.log(`Total update time: ${endPerformance - startPerformance}ms`);
+
+        // Sort timings by time in descending order
+        timings.sort((a, b) => b.time - a.time);
+
+        // Log all timings
+        console.log('Timings:');
+        timings.forEach((timing, index) => {
+            console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
+        });
+
+        // Find the longest section
+        var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms`);
+
         return engine;
     };
 
@@ -6953,7 +6992,7 @@ var Quadtree = __webpack_require__(17);
 
 
 /***/ }),
-/* 19 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -7326,7 +7365,7 @@ var Bounds = __webpack_require__(1);
 
 
 /***/ }),
-/* 20 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -7472,10 +7511,10 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 21 */
+/* 20 */
 /***/ (function(module, exports, __webpack_require__) {
 
-var Matter = module.exports = __webpack_require__(22);
+var Matter = module.exports = __webpack_require__(21);
 
 Matter.Axes = __webpack_require__(11);
 Matter.Bodies = __webpack_require__(12);
@@ -7484,28 +7523,28 @@ Matter.Bounds = __webpack_require__(1);
 Matter.Collision = __webpack_require__(8);
 Matter.Common = __webpack_require__(0);
 Matter.Composite = __webpack_require__(6);
-Matter.Composites = __webpack_require__(23);
+Matter.Composites = __webpack_require__(22);
 Matter.Constraint = __webpack_require__(10);
 Matter.Contact = __webpack_require__(16);
 Matter.Detector = __webpack_require__(13);
-Matter.Engine = __webpack_require__(18);
+Matter.Engine = __webpack_require__(17);
 Matter.Events = __webpack_require__(5);
-Matter.Grid = __webpack_require__(24);
+Matter.Grid = __webpack_require__(23);
 Matter.Mouse = __webpack_require__(14);
-Matter.MouseConstraint = __webpack_require__(25);
+Matter.MouseConstraint = __webpack_require__(24);
 Matter.Pair = __webpack_require__(9);
-Matter.Pairs = __webpack_require__(20);
+Matter.Pairs = __webpack_require__(19);
 Matter.Plugin = __webpack_require__(15);
-Matter.Query = __webpack_require__(26);
-Matter.Render = __webpack_require__(27);
-Matter.Resolver = __webpack_require__(19);
-Matter.Runner = __webpack_require__(28);
-Matter.SAT = __webpack_require__(29);
+Matter.Query = __webpack_require__(25);
+Matter.Render = __webpack_require__(26);
+Matter.Resolver = __webpack_require__(18);
+Matter.Runner = __webpack_require__(27);
+Matter.SAT = __webpack_require__(28);
 Matter.Sleeping = __webpack_require__(7);
-Matter.Svg = __webpack_require__(30);
+Matter.Svg = __webpack_require__(29);
 Matter.Vector = __webpack_require__(2);
 Matter.Vertices = __webpack_require__(3);
-Matter.World = __webpack_require__(31);
+Matter.World = __webpack_require__(30);
 
 // temporary back compatibility
 Matter.Engine.run = Matter.Runner.run;
@@ -7513,7 +7552,7 @@ Matter.Common.deprecated(Matter.Engine, 'run', 'Engine.run ➤ use Matter.Runner
 
 
 /***/ }),
-/* 22 */
+/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -7545,7 +7584,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.8" : undefined;
+    Matter.version =  true ? "0.19.9" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
@@ -7605,7 +7644,7 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 23 */
+/* 22 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -7948,7 +7987,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 24 */
+/* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8294,7 +8333,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 25 */
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8561,7 +8600,7 @@ var Bounds = __webpack_require__(1);
 
 
 /***/ }),
-/* 26 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8703,7 +8742,7 @@ var Vertices = __webpack_require__(3);
 
 
 /***/ }),
-/* 27 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10585,7 +10624,7 @@ var Mouse = __webpack_require__(14);
 
 
 /***/ }),
-/* 28 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10605,7 +10644,7 @@ var Runner = {};
 module.exports = Runner;
 
 var Events = __webpack_require__(5);
-var Engine = __webpack_require__(18);
+var Engine = __webpack_require__(17);
 var Common = __webpack_require__(0);
 
 (function() {
@@ -10861,7 +10900,7 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 29 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10904,7 +10943,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 30 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11135,7 +11174,7 @@ var Common = __webpack_require__(0);
 })();
 
 /***/ }),
-/* 31 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
