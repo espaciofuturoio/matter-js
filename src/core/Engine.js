@@ -251,7 +251,7 @@ var Body = require('../body/Body');
         timings.forEach((timing, index) => {
             console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
             if (timing.data) {
-                console.log(JSON.stringify(timing.data, null, 2));
+                debugger;
             }
         });
 
