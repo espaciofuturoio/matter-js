@@ -11,6 +11,7 @@ module.exports = Detector;
 var Common = require('../core/Common');
 var Collision = require('./Collision');
 var BVH = require('../collision/BVH');
+var DynamicAABBTree = require('../collision/DynamicAABBTree');
 
 (function () {
 
@@ -118,7 +119,7 @@ var BVH = require('../collision/BVH');
         return potentialPairs;
     };
 
-    Detector.collisionsBVH = function(detector) {
+    Detector.collisionsBVH = function (detector) {
         var potentialPairs = Detector._sweepAndPrune(detector);
         var collisions = detector.collisions;
         var collisionIndex = 0;
@@ -139,6 +140,55 @@ var BVH = require('../collision/BVH');
             collisions.length = collisionIndex;
         }
 
+        return collisions;
+    };
+
+    Detector._dynamicAABBTree = function (detector) {
+        var bodies = detector.bodies;
+        var tree = new DynamicAABBTree();
+        var potentialPairs = [];
+    
+        // Insert bodies into the Dynamic AABB Tree
+        for (var i = 0; i < bodies.length; i++) {
+            tree.insert(bodies[i]);
+        }
+    
+        // Query the Dynamic AABB Tree for potential collisions
+        for (var i = 0; i < bodies.length; i++) {
+            var body = bodies[i];
+            var candidates = tree.query(body.bounds);
+            for (var j = 0; j < candidates.length; j++) {
+                var candidate = candidates[j];
+                if (body !== candidate) {
+                    potentialPairs.push([body, candidate]);
+                }
+            }
+        }
+    
+        return potentialPairs;
+    };
+
+    Detector.collisionsAABBTree = function(detector) {
+        var potentialPairs = Detector._dynamicAABBTree(detector);
+        var collisions = detector.collisions;
+        var collisionIndex = 0;
+        var collides = Collision.collides;
+    
+        for (var i = 0; i < potentialPairs.length; i++) {
+            var pair = potentialPairs[i];
+            var bodyA = pair[0];
+            var bodyB = pair[1];
+    
+            var collision = collides(bodyA, bodyB, detector.pairs);
+            if (collision) {
+                collisions[collisionIndex++] = collision;
+            }
+        }
+    
+        if (collisions.length !== collisionIndex) {
+            collisions.length = collisionIndex;
+        }
+    
         return collisions;
     };
 

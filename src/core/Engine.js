@@ -157,8 +157,18 @@ var Body = require('../body/Body');
 
         var startCollisions = performance.now();
         // find all collisions
-        var collisions = Detector.collisionsBVH(detector);
-        timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
+        var collisions = Detector.collisions(detector);
+        timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions.length, bodies: allBodies.length });
+
+        var startCollisionsAABBTree = performance.now();
+        // find all collisions
+        var collisionsAABBTree = Detector.collisionsAABBTree(detector);
+        timings.push({ section: 'find collisions AABB Tree', time: performance.now() - startCollisionsAABBTree, data: collisionsAABBTree.length, bodies: allBodies.length });
+
+        var startCollisionsBVH = performance.now();
+        // find all collisions
+        var collisionsBVH = Detector.collisionsBVH(detector);
+        timings.push({ section: 'find collisions BVH', time: performance.now() - startCollisionsBVH, data: collisionsBVH.length, bodies: allBodies.length });
 
         var startPairs = performance.now();
         // update collision pairs

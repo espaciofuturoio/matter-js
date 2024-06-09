@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.16 by @liabru
+ * matter-js 0.19.17 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -5573,6 +5573,7 @@ module.exports = Detector;
 var Common = __webpack_require__(0);
 var Collision = __webpack_require__(8);
 var BVH = __webpack_require__(23);
+var DynamicAABBTree = __webpack_require__(24);
 
 (function () {
 
@@ -5680,7 +5681,7 @@ var BVH = __webpack_require__(23);
         return potentialPairs;
     };
 
-    Detector.collisionsBVH = function(detector) {
+    Detector.collisionsBVH = function (detector) {
         var potentialPairs = Detector._sweepAndPrune(detector);
         var collisions = detector.collisions;
         var collisionIndex = 0;
@@ -5701,6 +5702,55 @@ var BVH = __webpack_require__(23);
             collisions.length = collisionIndex;
         }
 
+        return collisions;
+    };
+
+    Detector._dynamicAABBTree = function (detector) {
+        var bodies = detector.bodies;
+        var tree = new DynamicAABBTree();
+        var potentialPairs = [];
+    
+        // Insert bodies into the Dynamic AABB Tree
+        for (var i = 0; i < bodies.length; i++) {
+            tree.insert(bodies[i]);
+        }
+    
+        // Query the Dynamic AABB Tree for potential collisions
+        for (var i = 0; i < bodies.length; i++) {
+            var body = bodies[i];
+            var candidates = tree.query(body.bounds);
+            for (var j = 0; j < candidates.length; j++) {
+                var candidate = candidates[j];
+                if (body !== candidate) {
+                    potentialPairs.push([body, candidate]);
+                }
+            }
+        }
+    
+        return potentialPairs;
+    };
+
+    Detector.collisionsAABBTree = function(detector) {
+        var potentialPairs = Detector._dynamicAABBTree(detector);
+        var collisions = detector.collisions;
+        var collisionIndex = 0;
+        var collides = Collision.collides;
+    
+        for (var i = 0; i < potentialPairs.length; i++) {
+            var pair = potentialPairs[i];
+            var bodyA = pair[0];
+            var bodyB = pair[1];
+    
+            var collision = collides(bodyA, bodyB, detector.pairs);
+            if (collision) {
+                collisions[collisionIndex++] = collision;
+            }
+        }
+    
+        if (collisions.length !== collisionIndex) {
+            collisions.length = collisionIndex;
+        }
+    
         return collisions;
     };
 
@@ -6619,8 +6669,18 @@ var Body = __webpack_require__(4);
 
         var startCollisions = performance.now();
         // find all collisions
-        var collisions = Detector.collisionsBVH(detector);
-        timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
+        var collisions = Detector.collisions(detector);
+        timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions.length, bodies: allBodies.length });
+
+        var startCollisionsAABBTree = performance.now();
+        // find all collisions
+        var collisionsAABBTree = Detector.collisionsAABBTree(detector);
+        timings.push({ section: 'find collisions AABB Tree', time: performance.now() - startCollisionsAABBTree, data: collisionsAABBTree.length, bodies: allBodies.length });
+
+        var startCollisionsBVH = performance.now();
+        // find all collisions
+        var collisionsBVH = Detector.collisionsBVH(detector);
+        timings.push({ section: 'find collisions BVH', time: performance.now() - startCollisionsBVH, data: collisionsBVH.length, bodies: allBodies.length });
 
         var startPairs = performance.now();
         // update collision pairs
@@ -7622,22 +7682,22 @@ Matter.Contact = __webpack_require__(16);
 Matter.Detector = __webpack_require__(13);
 Matter.Engine = __webpack_require__(17);
 Matter.Events = __webpack_require__(5);
-Matter.Grid = __webpack_require__(24);
+Matter.Grid = __webpack_require__(25);
 Matter.Mouse = __webpack_require__(14);
-Matter.MouseConstraint = __webpack_require__(25);
+Matter.MouseConstraint = __webpack_require__(26);
 Matter.Pair = __webpack_require__(9);
 Matter.Pairs = __webpack_require__(19);
 Matter.Plugin = __webpack_require__(15);
-Matter.Query = __webpack_require__(26);
-Matter.Render = __webpack_require__(27);
+Matter.Query = __webpack_require__(27);
+Matter.Render = __webpack_require__(28);
 Matter.Resolver = __webpack_require__(18);
-Matter.Runner = __webpack_require__(28);
-Matter.SAT = __webpack_require__(29);
+Matter.Runner = __webpack_require__(29);
+Matter.SAT = __webpack_require__(30);
 Matter.Sleeping = __webpack_require__(7);
-Matter.Svg = __webpack_require__(30);
+Matter.Svg = __webpack_require__(31);
 Matter.Vector = __webpack_require__(2);
 Matter.Vertices = __webpack_require__(3);
-Matter.World = __webpack_require__(31);
+Matter.World = __webpack_require__(32);
 
 // temporary back compatibility
 Matter.Engine.run = Matter.Runner.run;
@@ -7677,7 +7737,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.16" : undefined;
+    Matter.version =  true ? "0.19.17" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
@@ -8178,6 +8238,106 @@ module.exports = BVH;
 
 /***/ }),
 /* 24 */
+/***/ (function(module, exports) {
+
+class AABBNode {
+    constructor(bounds, body = null) {
+        this.bounds = bounds;
+        this.body = body;
+        this.left = null;
+        this.right = null;
+        this.parent = null;
+    }
+}
+
+class DynamicAABBTree {
+    constructor() {
+        this.root = null;
+    }
+
+    insert(body) {
+        const bounds = body.bounds;
+        const node = new AABBNode(bounds, body);
+
+        if (!this.root) {
+            this.root = node;
+        } else {
+            this._insertNode(this.root, node);
+        }
+    }
+
+    _insertNode(root, node) {
+        if (!root.left) {
+            root.left = node;
+            node.parent = root;
+        } else if (!root.right) {
+            root.right = node;
+            node.parent = root;
+        } else {
+            const leftVolume = this._calculateVolume(root.left.bounds);
+            const rightVolume = this._calculateVolume(root.right.bounds);
+            const newVolumeLeft = this._calculateVolume(this._mergeBounds(root.left.bounds, node.bounds));
+            const newVolumeRight = this._calculateVolume(this._mergeBounds(root.right.bounds, node.bounds));
+
+            const increaseLeft = newVolumeLeft - leftVolume;
+            const increaseRight = newVolumeRight - rightVolume;
+
+            if (increaseLeft < increaseRight) {
+                this._insertNode(root.left, node);
+            } else {
+                this._insertNode(root.right, node);
+            }
+        }
+
+        root.bounds = this._mergeBounds(root.bounds, node.bounds);
+    }
+
+    query(bounds) {
+        const potentialBodies = [];
+        this._queryNode(this.root, bounds, potentialBodies);
+        return potentialBodies;
+    }
+
+    _queryNode(node, bounds, potentialBodies) {
+        if (!node) return;
+
+        if (this._boundsOverlap(node.bounds, bounds)) {
+            if (node.body) {
+                potentialBodies.push(node.body);
+            }
+
+            this._queryNode(node.left, bounds, potentialBodies);
+            this._queryNode(node.right, bounds, potentialBodies);
+        }
+    }
+
+    _calculateVolume(bounds) {
+        return (bounds.max.x - bounds.min.x) * (bounds.max.y - bounds.min.y);
+    }
+
+    _mergeBounds(boundsA, boundsB) {
+        return {
+            min: {
+                x: Math.min(boundsA.min.x, boundsB.min.x),
+                y: Math.min(boundsA.min.y, boundsB.min.y)
+            },
+            max: {
+                x: Math.max(boundsA.max.x, boundsB.max.x),
+                y: Math.max(boundsA.max.y, boundsB.max.y)
+            }
+        };
+    }
+
+    _boundsOverlap(boundsA, boundsB) {
+        return !(boundsA.min.x > boundsB.max.x || boundsA.max.x < boundsB.min.x ||
+            boundsA.min.y > boundsB.max.y || boundsA.max.y < boundsB.min.y);
+    }
+}
+
+module.exports = DynamicAABBTree;
+
+/***/ }),
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8523,7 +8683,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 25 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8790,7 +8950,7 @@ var Bounds = __webpack_require__(1);
 
 
 /***/ }),
-/* 26 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8932,7 +9092,7 @@ var Vertices = __webpack_require__(3);
 
 
 /***/ }),
-/* 27 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10814,7 +10974,7 @@ var Mouse = __webpack_require__(14);
 
 
 /***/ }),
-/* 28 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11090,7 +11250,7 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 29 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11133,7 +11293,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 30 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11364,7 +11524,7 @@ var Common = __webpack_require__(0);
 })();
 
 /***/ }),
-/* 31 */
+/* 32 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
