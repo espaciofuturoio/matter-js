@@ -158,7 +158,7 @@ var Body = require('../body/Body');
         var startCollisions = performance.now();
         // find all collisions
         var collisions = Detector.collisions(detector);
-        timings.push({ section: 'find collisions', time: performance.now() - startCollisions });
+        timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
 
         var startPairs = performance.now();
         // update collision pairs
@@ -250,6 +250,9 @@ var Body = require('../body/Body');
         console.log('Timings:');
         timings.forEach((timing, index) => {
             console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
+            if (timing.data) {
+                console.log(timing.data);
+            }
         });
 
         // Find the longest section
