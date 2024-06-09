@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.17 by @liabru
+ * matter-js 0.19.18 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -7737,7 +7737,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.17" : undefined;
+    Matter.version =  true ? "0.19.18" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
