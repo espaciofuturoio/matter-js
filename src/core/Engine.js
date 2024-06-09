@@ -157,7 +157,7 @@ var Body = require('../body/Body');
 
         var startCollisions = performance.now();
         // find all collisions
-        var collisions = Detector.collisions(detector);
+        var collisions = Detector.collisions2(detector);
         timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
 
         var startPairs = performance.now();

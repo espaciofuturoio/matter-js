@@ -11,7 +11,7 @@ module.exports = Detector;
 var Common = require('../core/Common');
 var Collision = require('./Collision');
 
-(function() {
+(function () {
 
     /**
      * Creates a new collision detector.
@@ -19,7 +19,7 @@ var Collision = require('./Collision');
      * @param {} options
      * @return {detector} A new collision detector
      */
-    Detector.create = function(options) {
+    Detector.create = function (options) {
         var defaults = {
             bodies: [],
             collisions: [],
@@ -35,7 +35,7 @@ var Collision = require('./Collision');
      * @param {detector} detector
      * @param {body[]} bodies
      */
-    Detector.setBodies = function(detector, bodies) {
+    Detector.setBodies = function (detector, bodies) {
         detector.bodies = bodies.slice(0);
     };
 
@@ -44,9 +44,76 @@ var Collision = require('./Collision');
      * @method clear
      * @param {detector} detector
      */
-    Detector.clear = function(detector) {
+    Detector.clear = function (detector) {
         detector.bodies = [];
         detector.collisions = [];
+    };
+
+    /**
+     * Creates a grid for spatial partitioning.
+     * @method _createGrid
+     * @param {detector} detector
+     * @param {number} cellSize
+     */
+    Detector._createGrid = function (detector, cellSize) {
+        var grid = {};
+        var bodies = detector.bodies;
+        var bodiesLength = bodies.length;
+
+        for (var i = 0; i < bodiesLength; i++) {
+            var body = bodies[i];
+            var bounds = body.bounds;
+            var minX = Math.floor(bounds.min.x / cellSize);
+            var minY = Math.floor(bounds.min.y / cellSize);
+            var maxX = Math.floor(bounds.max.x / cellSize);
+            var maxY = Math.floor(bounds.max.y / cellSize);
+
+            for (var x = minX; x <= maxX; x++) {
+                for (var y = minY; y <= maxY; y++) {
+                    var key = x + ',' + y;
+                    if (!grid[key]) {
+                        grid[key] = [];
+                    }
+                    grid[key].push(body);
+                }
+            }
+        }
+
+        return grid;
+    };
+
+    Detector.collisions2 = function(detector) {
+        var cellSize = 50; // Adjust cell size as needed
+        var grid = Detector._createGrid(detector, cellSize);
+        var collisions = detector.collisions;
+        var collisionIndex = 0;
+        var collides = Collision.collides;
+    
+        for (var key in grid) {
+            if (grid.hasOwnProperty(key)) {
+                var cellBodies = grid[key];
+                var cellBodiesLength = cellBodies.length;
+    
+                for (var i = 0; i < cellBodiesLength; i++) {
+                    var bodyA = cellBodies[i];
+    
+                    for (var j = i + 1; j < cellBodiesLength; j++) {
+                        var bodyB = cellBodies[j];
+    
+                        var collision = collides(bodyA, bodyB, detector.pairs);
+                        if (collision) {
+                            collisions[collisionIndex++] = collision;
+                        }
+                    }
+                }
+            }
+        }
+    
+        if (collisions.length !== collisionIndex) {
+            collisions.length = collisionIndex;
+        }
+    
+        return collisions;
     };
 
     /**
@@ -58,7 +125,7 @@ var Collision = require('./Collision');
      * @param {detector} detector
      * @return {collision[]} collisions
      */
-    Detector.collisions = function(detector) {
+    Detector.collisions = function (detector) {
         var pairs = detector.pairs,
             bodies = detector.bodies,
             bodiesLength = bodies.length,
@@ -112,7 +179,7 @@ var Collision = require('./Collision');
                 } else {
                     var partsAStart = partsALength > 1 ? 1 : 0,
                         partsBStart = partsBLength > 1 ? 1 : 0;
-                    
+
                     for (var k = partsAStart; k < partsALength; k++) {
                         var partA = bodyA.parts[k],
                             boundsA = partA.bounds;
@@ -152,7 +219,7 @@ var Collision = require('./Collision');
      * @param {} filterB
      * @return {bool} `true` if collision can occur
      */
-    Detector.canCollide = function(filterA, filterB) {
+    Detector.canCollide = function (filterA, filterB) {
         if (filterA.group === filterB.group && filterA.group !== 0)
             return filterA.group > 0;
 
@@ -168,7 +235,7 @@ var Collision = require('./Collision');
      * @param {body} bodyB
      * @return {number} The signed delta used for sorting
      */
-    Detector._compareBoundsX = function(bodyA, bodyB) {
+    Detector._compareBoundsX = function (bodyA, bodyB) {
         return bodyA.bounds.min.x - bodyB.bounds.min.x;
     };
 

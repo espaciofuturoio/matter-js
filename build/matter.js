@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.10 by @liabru
+ * matter-js 0.19.11 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -5573,7 +5573,7 @@ module.exports = Detector;
 var Common = __webpack_require__(0);
 var Collision = __webpack_require__(8);
 
-(function() {
+(function () {
 
     /**
      * Creates a new collision detector.
@@ -5581,7 +5581,7 @@ var Collision = __webpack_require__(8);
      * @param {} options
      * @return {detector} A new collision detector
      */
-    Detector.create = function(options) {
+    Detector.create = function (options) {
         var defaults = {
             bodies: [],
             collisions: [],
@@ -5597,7 +5597,7 @@ var Collision = __webpack_require__(8);
      * @param {detector} detector
      * @param {body[]} bodies
      */
-    Detector.setBodies = function(detector, bodies) {
+    Detector.setBodies = function (detector, bodies) {
         detector.bodies = bodies.slice(0);
     };
 
@@ -5606,9 +5606,76 @@ var Collision = __webpack_require__(8);
      * @method clear
      * @param {detector} detector
      */
-    Detector.clear = function(detector) {
+    Detector.clear = function (detector) {
         detector.bodies = [];
         detector.collisions = [];
+    };
+
+    /**
+     * Creates a grid for spatial partitioning.
+     * @method _createGrid
+     * @param {detector} detector
+     * @param {number} cellSize
+     */
+    Detector._createGrid = function (detector, cellSize) {
+        var grid = {};
+        var bodies = detector.bodies;
+        var bodiesLength = bodies.length;
+
+        for (var i = 0; i < bodiesLength; i++) {
+            var body = bodies[i];
+            var bounds = body.bounds;
+            var minX = Math.floor(bounds.min.x / cellSize);
+            var minY = Math.floor(bounds.min.y / cellSize);
+            var maxX = Math.floor(bounds.max.x / cellSize);
+            var maxY = Math.floor(bounds.max.y / cellSize);
+
+            for (var x = minX; x <= maxX; x++) {
+                for (var y = minY; y <= maxY; y++) {
+                    var key = x + ',' + y;
+                    if (!grid[key]) {
+                        grid[key] = [];
+                    }
+                    grid[key].push(body);
+                }
+            }
+        }
+
+        return grid;
+    };
+
+    Detector.collisions2 = function(detector) {
+        var cellSize = 50; // Adjust cell size as needed
+        var grid = Detector._createGrid(detector, cellSize);
+        var collisions = detector.collisions;
+        var collisionIndex = 0;
+        var collides = Collision.collides;
+    
+        for (var key in grid) {
+            if (grid.hasOwnProperty(key)) {
+                var cellBodies = grid[key];
+                var cellBodiesLength = cellBodies.length;
+    
+                for (var i = 0; i < cellBodiesLength; i++) {
+                    var bodyA = cellBodies[i];
+    
+                    for (var j = i + 1; j < cellBodiesLength; j++) {
+                        var bodyB = cellBodies[j];
+    
+                        var collision = collides(bodyA, bodyB, detector.pairs);
+                        if (collision) {
+                            collisions[collisionIndex++] = collision;
+                        }
+                    }
+                }
+            }
+        }
+    
+        if (collisions.length !== collisionIndex) {
+            collisions.length = collisionIndex;
+        }
+    
+        return collisions;
     };
 
     /**
@@ -5620,7 +5687,7 @@ var Collision = __webpack_require__(8);
      * @param {detector} detector
      * @return {collision[]} collisions
      */
-    Detector.collisions = function(detector) {
+    Detector.collisions = function (detector) {
         var pairs = detector.pairs,
             bodies = detector.bodies,
             bodiesLength = bodies.length,
@@ -5674,7 +5741,7 @@ var Collision = __webpack_require__(8);
                 } else {
                     var partsAStart = partsALength > 1 ? 1 : 0,
                         partsBStart = partsBLength > 1 ? 1 : 0;
-                    
+
                     for (var k = partsAStart; k < partsALength; k++) {
                         var partA = bodyA.parts[k],
                             boundsA = partA.bounds;
@@ -5714,7 +5781,7 @@ var Collision = __webpack_require__(8);
      * @param {} filterB
      * @return {bool} `true` if collision can occur
      */
-    Detector.canCollide = function(filterA, filterB) {
+    Detector.canCollide = function (filterA, filterB) {
         if (filterA.group === filterB.group && filterA.group !== 0)
             return filterA.group > 0;
 
@@ -5730,7 +5797,7 @@ var Collision = __webpack_require__(8);
      * @param {body} bodyB
      * @return {number} The signed delta used for sorting
      */
-    Detector._compareBoundsX = function(bodyA, bodyB) {
+    Detector._compareBoundsX = function (bodyA, bodyB) {
         return bodyA.bounds.min.x - bodyB.bounds.min.x;
     };
 
@@ -6526,7 +6593,7 @@ var Body = __webpack_require__(4);
 
         var startCollisions = performance.now();
         // find all collisions
-        var collisions = Detector.collisions(detector);
+        var collisions = Detector.collisions2(detector);
         timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
 
         var startPairs = performance.now();
@@ -7587,7 +7654,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.10" : undefined;
+    Matter.version =  true ? "0.19.11" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
