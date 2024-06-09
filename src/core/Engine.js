@@ -250,14 +250,11 @@ var Body = require('../body/Body');
         console.log('Timings:');
         timings.forEach((timing, index) => {
             console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
-            if (timing.data) {
-                debugger;
-            }
         });
 
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2.01`);
 
         return engine;
     };

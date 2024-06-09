@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.13 by @liabru
+ * matter-js 0.19.14 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -6686,14 +6686,11 @@ var Body = __webpack_require__(4);
         console.log('Timings:');
         timings.forEach((timing, index) => {
             console.log(`${index + 1}. ${timing.section}: ${timing.time}ms`);
-            if (timing.data) {
-                debugger;
-            }
         });
 
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2.01`);
 
         return engine;
     };
@@ -7654,7 +7651,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.13" : undefined;
+    Matter.version =  true ? "0.19.14" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
