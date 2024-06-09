@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.15 by @liabru
+ * matter-js 0.19.16 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -6619,7 +6619,7 @@ var Body = __webpack_require__(4);
 
         var startCollisions = performance.now();
         // find all collisions
-        var collisions = Detector.collisions2(detector);
+        var collisions = Detector.collisionsBVH(detector);
         timings.push({ section: 'find collisions', time: performance.now() - startCollisions, data: collisions });
 
         var startPairs = performance.now();
@@ -7677,7 +7677,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.15" : undefined;
+    Matter.version =  true ? "0.19.16" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
