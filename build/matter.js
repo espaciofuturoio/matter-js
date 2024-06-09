@@ -1,5 +1,5 @@
 /*!
- * matter-js 0.19.14 by @liabru
+ * matter-js 0.19.15 by @liabru
  * http://brm.io/matter-js/
  * License MIT
  * 
@@ -5572,6 +5572,7 @@ module.exports = Detector;
 
 var Common = __webpack_require__(0);
 var Collision = __webpack_require__(8);
+var BVH = __webpack_require__(23);
 
 (function () {
 
@@ -5612,69 +5613,94 @@ var Collision = __webpack_require__(8);
     };
 
     /**
-     * Creates a grid for spatial partitioning.
-     * @method _createGrid
+     * Sorts bodies along the x-axis and checks for overlaps.
+     * @method _sweepAndPrune
      * @param {detector} detector
-     * @param {number} cellSize
+     * @return {Array} potentialPairs
      */
-    Detector._createGrid = function (detector, cellSize) {
-        var grid = {};
+    Detector._sweepAndPrune = function (detector) {
         var bodies = detector.bodies;
         var bodiesLength = bodies.length;
+        var potentialPairs = [];
 
+        // Sort bodies along the x-axis
+        bodies.sort(function (bodyA, bodyB) {
+            return bodyA.bounds.min.x - bodyB.bounds.min.x;
+        });
+
+        // Check for overlaps along the x-axis
         for (var i = 0; i < bodiesLength; i++) {
-            var body = bodies[i];
-            var bounds = body.bounds;
-            var minX = Math.floor(bounds.min.x / cellSize);
-            var minY = Math.floor(bounds.min.y / cellSize);
-            var maxX = Math.floor(bounds.max.x / cellSize);
-            var maxY = Math.floor(bounds.max.y / cellSize);
+            var bodyA = bodies[i];
+            for (var j = i + 1; j < bodiesLength; j++) {
+                var bodyB = bodies[j];
 
-            for (var x = minX; x <= maxX; x++) {
-                for (var y = minY; y <= maxY; y++) {
-                    var key = x + ',' + y;
-                    if (!grid[key]) {
-                        grid[key] = [];
-                    }
-                    grid[key].push(body);
+                // If bodyB is too far along the x-axis, break the loop
+                if (bodyB.bounds.min.x > bodyA.bounds.max.x) {
+                    break;
+                }
+
+                // Check for overlap along the y-axis
+                if (bodyA.bounds.max.y >= bodyB.bounds.min.y && bodyA.bounds.min.y <= bodyB.bounds.max.y) {
+                    potentialPairs.push([bodyA, bodyB]);
                 }
             }
         }
 
-        return grid;
+        return potentialPairs;
     };
 
-    Detector.collisions2 = function(detector) {
-        var cellSize = 50; // Adjust cell size as needed
-        var grid = Detector._createGrid(detector, cellSize);
+    /**
+     * Builds a BVH and queries it for potential collisions.
+     * @method _bvh
+     * @param {detector} detector
+     * @return {Array} potentialPairs
+     */
+    Detector._bvh = function (detector) {
+        var bodies = detector.bodies;
+        var bvh = new BVH();
+        var potentialPairs = [];
+
+        // Insert bodies into the BVH
+        for (var i = 0; i < bodies.length; i++) {
+            bvh.insert(bodies[i]);
+        }
+
+        // Query the BVH for potential collisions
+        for (var i = 0; i < bodies.length; i++) {
+            var body = bodies[i];
+            var candidates = bvh.query(body.bounds);
+            for (var j = 0; j < candidates.length; j++) {
+                var candidate = candidates[j];
+                if (body !== candidate) {
+                    potentialPairs.push([body, candidate]);
+                }
+            }
+        }
+
+        return potentialPairs;
+    };
+
+    Detector.collisionsBVH = function(detector) {
+        var potentialPairs = Detector._sweepAndPrune(detector);
         var collisions = detector.collisions;
         var collisionIndex = 0;
         var collides = Collision.collides;
-    
-        for (var key in grid) {
-            if (grid.hasOwnProperty(key)) {
-                var cellBodies = grid[key];
-                var cellBodiesLength = cellBodies.length;
-    
-                for (var i = 0; i < cellBodiesLength; i++) {
-                    var bodyA = cellBodies[i];
-    
-                    for (var j = i + 1; j < cellBodiesLength; j++) {
-                        var bodyB = cellBodies[j];
-    
-                        var collision = collides(bodyA, bodyB, detector.pairs);
-                        if (collision) {
-                            collisions[collisionIndex++] = collision;
-                        }
-                    }
-                }
+
+        for (var i = 0; i < potentialPairs.length; i++) {
+            var pair = potentialPairs[i];
+            var bodyA = pair[0];
+            var bodyB = pair[1];
+
+            var collision = collides(bodyA, bodyB, detector.pairs);
+            if (collision) {
+                collisions[collisionIndex++] = collision;
             }
         }
-    
+
         if (collisions.length !== collisionIndex) {
             collisions.length = collisionIndex;
         }
-    
+
         return collisions;
     };
 
@@ -6690,7 +6716,7 @@ var Body = __webpack_require__(4);
 
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2.01`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisionsBVH.01`);
 
         return engine;
     };
@@ -7596,22 +7622,22 @@ Matter.Contact = __webpack_require__(16);
 Matter.Detector = __webpack_require__(13);
 Matter.Engine = __webpack_require__(17);
 Matter.Events = __webpack_require__(5);
-Matter.Grid = __webpack_require__(23);
+Matter.Grid = __webpack_require__(24);
 Matter.Mouse = __webpack_require__(14);
-Matter.MouseConstraint = __webpack_require__(24);
+Matter.MouseConstraint = __webpack_require__(25);
 Matter.Pair = __webpack_require__(9);
 Matter.Pairs = __webpack_require__(19);
 Matter.Plugin = __webpack_require__(15);
-Matter.Query = __webpack_require__(25);
-Matter.Render = __webpack_require__(26);
+Matter.Query = __webpack_require__(26);
+Matter.Render = __webpack_require__(27);
 Matter.Resolver = __webpack_require__(18);
-Matter.Runner = __webpack_require__(27);
-Matter.SAT = __webpack_require__(28);
+Matter.Runner = __webpack_require__(28);
+Matter.SAT = __webpack_require__(29);
 Matter.Sleeping = __webpack_require__(7);
-Matter.Svg = __webpack_require__(29);
+Matter.Svg = __webpack_require__(30);
 Matter.Vector = __webpack_require__(2);
 Matter.Vertices = __webpack_require__(3);
-Matter.World = __webpack_require__(30);
+Matter.World = __webpack_require__(31);
 
 // temporary back compatibility
 Matter.Engine.run = Matter.Runner.run;
@@ -7651,7 +7677,7 @@ var Common = __webpack_require__(0);
      * @readOnly
      * @type {String}
      */
-    Matter.version =  true ? "0.19.14" : undefined;
+    Matter.version =  true ? "0.19.15" : undefined;
 
     /**
      * A list of plugin dependencies to be installed. These are normally set and installed through `Matter.use`.
@@ -8055,6 +8081,103 @@ var deprecated = Common.deprecated;
 
 /***/ }),
 /* 23 */
+/***/ (function(module, exports) {
+
+class BVHNode {
+    constructor(bounds, bodies = []) {
+        this.bounds = bounds;
+        this.bodies = bodies;
+        this.left = null;
+        this.right = null;
+    }
+}
+
+class BVH {
+    constructor() {
+        this.root = null;
+    }
+
+    insert(body) {
+        const bounds = body.bounds;
+        const node = new BVHNode(bounds, [body]);
+
+        if (!this.root) {
+            this.root = node;
+        } else {
+            this._insertNode(this.root, node);
+        }
+    }
+
+    _insertNode(root, node) {
+        if (!root.left) {
+            root.left = node;
+        } else if (!root.right) {
+            root.right = node;
+        } else {
+            const leftVolume = this._calculateVolume(root.left.bounds);
+            const rightVolume = this._calculateVolume(root.right.bounds);
+            const newVolumeLeft = this._calculateVolume(this._mergeBounds(root.left.bounds, node.bounds));
+            const newVolumeRight = this._calculateVolume(this._mergeBounds(root.right.bounds, node.bounds));
+
+            const increaseLeft = newVolumeLeft - leftVolume;
+            const increaseRight = newVolumeRight - rightVolume;
+
+            if (increaseLeft < increaseRight) {
+                this._insertNode(root.left, node);
+            } else {
+                this._insertNode(root.right, node);
+            }
+        }
+
+        root.bounds = this._mergeBounds(root.bounds, node.bounds);
+    }
+
+    query(bounds) {
+        const potentialBodies = [];
+        this._queryNode(this.root, bounds, potentialBodies);
+        return potentialBodies;
+    }
+
+    _queryNode(node, bounds, potentialBodies) {
+        if (!node) return;
+
+        if (this._boundsOverlap(node.bounds, bounds)) {
+            if (node.bodies.length > 0) {
+                potentialBodies.push(...node.bodies);
+            }
+
+            this._queryNode(node.left, bounds, potentialBodies);
+            this._queryNode(node.right, bounds, potentialBodies);
+        }
+    }
+
+    _calculateVolume(bounds) {
+        return (bounds.max.x - bounds.min.x) * (bounds.max.y - bounds.min.y);
+    }
+
+    _mergeBounds(boundsA, boundsB) {
+        return {
+            min: {
+                x: Math.min(boundsA.min.x, boundsB.min.x),
+                y: Math.min(boundsA.min.y, boundsB.min.y)
+            },
+            max: {
+                x: Math.max(boundsA.max.x, boundsB.max.x),
+                y: Math.max(boundsA.max.y, boundsB.max.y)
+            }
+        };
+    }
+
+    _boundsOverlap(boundsA, boundsB) {
+        return !(boundsA.min.x > boundsB.max.x || boundsA.max.x < boundsB.min.x ||
+                 boundsA.min.y > boundsB.max.y || boundsA.max.y < boundsB.min.y);
+    }
+}
+
+module.exports = BVH;
+
+/***/ }),
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8400,7 +8523,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 24 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8667,7 +8790,7 @@ var Bounds = __webpack_require__(1);
 
 
 /***/ }),
-/* 25 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -8809,7 +8932,7 @@ var Vertices = __webpack_require__(3);
 
 
 /***/ }),
-/* 26 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10691,7 +10814,7 @@ var Mouse = __webpack_require__(14);
 
 
 /***/ }),
-/* 27 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -10967,7 +11090,7 @@ var Common = __webpack_require__(0);
 
 
 /***/ }),
-/* 28 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11010,7 +11133,7 @@ var deprecated = Common.deprecated;
 
 
 /***/ }),
-/* 29 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**
@@ -11241,7 +11364,7 @@ var Common = __webpack_require__(0);
 })();
 
 /***/ }),
-/* 30 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /**

@@ -254,7 +254,7 @@ var Body = require('../body/Body');
 
         // Find the longest section
         var longest = timings.reduce((max, timing) => timing.time > max.time ? timing : max, timings[0]);
-        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisions2.01`);
+        console.log(`Longest section: ${longest.section} with time ${longest.time}ms using collisionsBVH.01`);
 
         return engine;
     };

@@ -10,6 +10,7 @@ module.exports = Detector;
 
 var Common = require('../core/Common');
 var Collision = require('./Collision');
+var BVH = require('../collision/BVH');
 
 (function () {
 
@@ -50,69 +51,94 @@ var Collision = require('./Collision');
     };
 
     /**
-     * Creates a grid for spatial partitioning.
-     * @method _createGrid
+     * Sorts bodies along the x-axis and checks for overlaps.
+     * @method _sweepAndPrune
      * @param {detector} detector
-     * @param {number} cellSize
+     * @return {Array} potentialPairs
      */
-    Detector._createGrid = function (detector, cellSize) {
-        var grid = {};
+    Detector._sweepAndPrune = function (detector) {
         var bodies = detector.bodies;
         var bodiesLength = bodies.length;
+        var potentialPairs = [];
 
+        // Sort bodies along the x-axis
+        bodies.sort(function (bodyA, bodyB) {
+            return bodyA.bounds.min.x - bodyB.bounds.min.x;
+        });
+
+        // Check for overlaps along the x-axis
         for (var i = 0; i < bodiesLength; i++) {
-            var body = bodies[i];
-            var bounds = body.bounds;
-            var minX = Math.floor(bounds.min.x / cellSize);
-            var minY = Math.floor(bounds.min.y / cellSize);
-            var maxX = Math.floor(bounds.max.x / cellSize);
-            var maxY = Math.floor(bounds.max.y / cellSize);
+            var bodyA = bodies[i];
+            for (var j = i + 1; j < bodiesLength; j++) {
+                var bodyB = bodies[j];
 
-            for (var x = minX; x <= maxX; x++) {
-                for (var y = minY; y <= maxY; y++) {
-                    var key = x + ',' + y;
-                    if (!grid[key]) {
-                        grid[key] = [];
-                    }
-                    grid[key].push(body);
+                // If bodyB is too far along the x-axis, break the loop
+                if (bodyB.bounds.min.x > bodyA.bounds.max.x) {
+                    break;
+                }
+
+                // Check for overlap along the y-axis
+                if (bodyA.bounds.max.y >= bodyB.bounds.min.y && bodyA.bounds.min.y <= bodyB.bounds.max.y) {
+                    potentialPairs.push([bodyA, bodyB]);
                 }
             }
         }
 
-        return grid;
+        return potentialPairs;
     };
 
-    Detector.collisions2 = function(detector) {
-        var cellSize = 50; // Adjust cell size as needed
-        var grid = Detector._createGrid(detector, cellSize);
+    /**
+     * Builds a BVH and queries it for potential collisions.
+     * @method _bvh
+     * @param {detector} detector
+     * @return {Array} potentialPairs
+     */
+    Detector._bvh = function (detector) {
+        var bodies = detector.bodies;
+        var bvh = new BVH();
+        var potentialPairs = [];
+
+        // Insert bodies into the BVH
+        for (var i = 0; i < bodies.length; i++) {
+            bvh.insert(bodies[i]);
+        }
+
+        // Query the BVH for potential collisions
+        for (var i = 0; i < bodies.length; i++) {
+            var body = bodies[i];
+            var candidates = bvh.query(body.bounds);
+            for (var j = 0; j < candidates.length; j++) {
+                var candidate = candidates[j];
+                if (body !== candidate) {
+                    potentialPairs.push([body, candidate]);
+                }
+            }
+        }
+
+        return potentialPairs;
+    };
+
+    Detector.collisionsBVH = function(detector) {
+        var potentialPairs = Detector._sweepAndPrune(detector);
         var collisions = detector.collisions;
         var collisionIndex = 0;
         var collides = Collision.collides;
-    
-        for (var key in grid) {
-            if (grid.hasOwnProperty(key)) {
-                var cellBodies = grid[key];
-                var cellBodiesLength = cellBodies.length;
-    
-                for (var i = 0; i < cellBodiesLength; i++) {
-                    var bodyA = cellBodies[i];
-    
-                    for (var j = i + 1; j < cellBodiesLength; j++) {
-                        var bodyB = cellBodies[j];
-    
-                        var collision = collides(bodyA, bodyB, detector.pairs);
-                        if (collision) {
-                            collisions[collisionIndex++] = collision;
-                        }
-                    }
-                }
+
+        for (var i = 0; i < potentialPairs.length; i++) {
+            var pair = potentialPairs[i];
+            var bodyA = pair[0];
+            var bodyB = pair[1];
+
+            var collision = collides(bodyA, bodyB, detector.pairs);
+            if (collision) {
+                collisions[collisionIndex++] = collision;
             }
         }
-    
+
         if (collisions.length !== collisionIndex) {
             collisions.length = collisionIndex;
         }
-    
+
         return collisions;
     };
 
